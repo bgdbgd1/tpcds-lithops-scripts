@@ -238,11 +238,9 @@ if __name__ == "__main__":
             key['start_index'] = i
             passed_tasks.append({'key': key})
 
-    res = run_all_commands_local(passed_tasks)
-    # with FunctionExecutor(runtime='bogdan/tpcds-scripts-linux-2') as fexec:
-    #     fut = fexec.map(run_command, [passed_tasks[0]])
-    #     res = fexec.get_result(fut)
-    # pywren.wait(fut)
-    # res = [f.result() for f in fut]
+    # res = run_all_commands_local(passed_tasks)
+    with FunctionExecutor(runtime='bogdan/tpcds-scripts-linux-2') as fexec:
+        fut = fexec.map(run_command, [passed_tasks[0]])
+        res = fexec.get_result(fut)
     print("good:" + str(res.count("good")) + " bad:" + str(res.count("bad")) + " total:" + str(len(res)))
     # exit(0)
