@@ -37,8 +37,7 @@ RUN pip install \
         kafka-python \
         cloudpickle \
         ps-mem \
-        tblib \
-        fsspec
+        tblib
 
 # Additional dependencies
 RUN pip install \
