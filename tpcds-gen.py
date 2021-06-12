@@ -62,22 +62,22 @@ if __name__ == "__main__":
                 if not os.path.isfile(fullpathfile):
                     print(f"bad: fullpathfile - {fullpathfile}, total - {total}")
                     return "bad"
-                # keyname = "scale" + str(scale) + "/" + table + "/" + filename
-                # put_start = time.time()
-                # client.upload_file(fullpathfile, S3_BUCKET, 'tpcds-data/' + keyname)
-                # put_end = time.time()
-                # # res = subprocess.check_output(["rm", fullpathfile])
-                # if "sales" in table:
-                #     return_table = table.split("_")[0] + "_returns"
-                #     return_filename = return_table + "_" + str(index) + "_" + str(total) + ".csv"
-                #     return_fullpathfile = return_filename
-                #     if total == 1:
-                #         src_return_fullpath = return_table + ".csv"
-                #         res = subprocess.check_output(["mv", src_return_fullpath, return_fullpathfile])
-                #     return_keyname = "scale" + str(scale) + "/" + return_table + "/" + return_filename
-                #     client.upload_file(return_fullpathfile, S3_BUCKET, 'tpcds-data/' + return_keyname)
-                #     # res = subprocess.check_output(["rm", return_fullpathfile])
-                # print(str(index) + " th object uploaded using " + str(put_end - put_start) + " seconds.")
+                keyname = "scale" + str(scale) + "/" + table + "/" + filename
+                put_start = time.time()
+                client.upload_file(fullpathfile, S3_BUCKET, 'tpcds-data/' + keyname)
+                put_end = time.time()
+                # res = subprocess.check_output(["rm", fullpathfile])
+                if "sales" in table:
+                    return_table = table.split("_")[0] + "_returns"
+                    return_filename = return_table + "_" + str(index) + "_" + str(total) + ".csv"
+                    return_fullpathfile = return_filename
+                    if total == 1:
+                        src_return_fullpath = return_table + ".csv"
+                        res = subprocess.check_output(["mv", src_return_fullpath, return_fullpathfile])
+                    return_keyname = "scale" + str(scale) + "/" + return_table + "/" + return_filename
+                    client.upload_file(return_fullpathfile, S3_BUCKET, 'tpcds-data/' + return_keyname)
+                    # res = subprocess.check_output(["rm", return_fullpathfile])
+                print(str(index) + " th object uploaded using " + str(put_end - put_start) + " seconds.")
         return "good"
 
 

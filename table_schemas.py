@@ -46,7 +46,7 @@ schemas = {
     ("sr_store_credit", "decimal"),
     ("sr_net_loss", "decimal"),
   ],
-  "catalogue_sales": [
+  "catalog_sales": [
     ("cs_sold_date_sk", "identifier"),
     ("cs_sold_time_sk", "identifier"),
     ("cs_ship_date_sk", "identifier"),
@@ -82,7 +82,7 @@ schemas = {
     ("cs_net_paid_inc_ship_tax", "decimal"),
     ("cs_net_profit", "decimal")
   ],
-  "catalogue_returns": [
+  "catalog_returns": [
     ("cr_returned_date_sk", "identifier"),
     ("cr_returned_time_sk", "identifier"),
     ("cr_item_sk", "identifier"),

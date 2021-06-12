@@ -6,10 +6,7 @@ import numpy as np
 import datetime
 import table_schemas
 from IPython import get_ipython
-from config_vars import S3_BUCKET
-
 from s3fs import S3FileSystem
-import lithops
 
 import redis
 
@@ -18,6 +15,8 @@ from hashlib import md5
 
 import boto3
 from io import BytesIO, StringIO
+from multiprocessing.pool import ThreadPool
+import lithops
 
 # SELECT
 #   count(DISTINCT ws_order_number) AS `order count `,
@@ -64,6 +63,7 @@ from io import BytesIO, StringIO
 # LIMIT 100
 
 
+S3_BUCKET = 'bogdan-experiments'
 scale = 10
 parall_1 = 10
 parall_2 = 10
@@ -86,11 +86,12 @@ query_name = "1"
 
 n_nodes = len(hostnames)
 
-wrenexec = lithops.FunctionExecutor(runtime='bogdan/tpcds-scripts-linux-2')
+wrenexec = lithops.FunctionExecutor(runtime="bogdan/tpcds-scripts-lithops-2")
+
 stage_info_load = {}
 stage_info_filename = "stage_info_load_" + query_name + ".pickle"
 if os.path.exists(stage_info_filename):
-    stage_info_load = pickle.load(open(stage_info_filename, "rb"))
+    stage_info_load = pickle.load(open(stage_info_filename, "r"))
 
 pm = [str(parall_1), str(parall_2), str(parall_3), str(pywren_rate), str(n_nodes)]
 filename = "nomiti.cluster-" + storage_mode + '-tpcds-q' + query_name + '-scale' + str(scale) + "-" + "-".join(
@@ -160,7 +161,7 @@ def read_local_table(key):
     for d in dtypes:
         if dtypes[d] == datetime.datetime or dtypes[d] == np.datetime64:
             parse_dates.append(d)
-            dtypes[d] = np.dtype(np.unicode)
+            dtypes[d] = np.dtype("string")
     part_data = pd.read_table(loc,
                               delimiter="|",
                               header=None,
@@ -186,40 +187,17 @@ def read_s3_table(key, s3_client=None):
     if s3_client == None:
         s3_client = boto3.client("s3")
     data = []
+    print("=================LOC33=================")
+    print(loc)
+    print(loc[24:])
     if isinstance(key['loc'], str):
-        print(f"=============== S3_BUCKET = {S3_BUCKET} ===========")
-        print(f'=============== KEY = {loc[33:]} =================')
-        print(f'=============== LOC = {loc} =====================')
         loc = key['loc']
-        # part_data = pd.read_table(loc,
-        #                          delimiter="|",
-        #                          header=None,
-        #                          names=names,
-        #                          usecols=range(len(names) - 1),
-        #                          dtype=dtypes,
-        #                          na_values="-",
-        #                          parse_dates=parse_dates)
-        obj = s3_client.get_object(Bucket=S3_BUCKET, Key=loc[33:])['Body'].read()
+        obj = s3_client.get_object(Bucket=S3_BUCKET, Key=loc[24:])['Body'].read()
         data.append(obj)
     else:
-        pd_tables = []
         for loc in key['loc']:
-            print(f"=============== S3_BUCKET = {S3_BUCKET} ===========")
-            print(f'=============== KEY = {loc[33:]} =================')
-            print(f'=============== LOC = {loc} =====================')
-            obj = s3_client.get_object(Bucket=S3_BUCKET, Key=loc[33:])['Body'].read()
+            obj = s3_client.get_object(Bucket=S3_BUCKET, Key=loc[24:])['Body'].read()
             data.append(obj)
-        #     pd_table = pd.read_table(loc,
-        #                              delimiter="|",
-        #                              header=None,
-        #                              names=names,
-        #                              usecols=range(len(names) - 1),
-        #                              dtype=dtypes,
-        #                              na_values="-",
-        #                              parse_dates=parse_dates)
-        #     pd_tables.append(pd_table)
-        # part_data = pd.concat(pd_tables)
-
 
     data_str = []
     for obj in data:
@@ -274,6 +252,7 @@ def add_bin(df, indices, bintype, partitions):
     else:
         raise Exception()
     # print("here is " + str(time.time() - tstart))
+    # TODO: FIX this for outputinfo
     if hvalues.empty:
         return []
 
@@ -313,9 +292,6 @@ def write_s3_intermediate(output_loc, table, s3_client=None):
                          Key=f'{str(bucket_index)}/{output_loc}',
                          Body=csv_buffer.getvalue())
 
-    # s3_client.put_object(Bucket='qifan-tpcds-' + str(bucket_index),
-    #                      Key=output_loc,
-    #                      Body=csv_buffer.getvalue())
     output_info = {}
     output_info['loc'] = output_loc
     output_info['names'] = slt_columns
@@ -396,6 +372,7 @@ def write_s3_partitions(df, column_names, bintype, partitions, storage):
             # write output to storage
             output_loc = storage + str(bin_index) + ".csv"
             outputs_info.append(write_s3_intermediate(output_loc, split, s3_client))
+
     print("===================== BINS ==================")
     print(bins)
     for i in range(len(bins)):
@@ -448,12 +425,12 @@ def write_redis_partitions(df, column_names, bintype, partitions, storage):
             redis_client = pipes[redis_index]
             outputs_info.append(write_redis_intermediate(output_loc, split, redis_client))
 
-    # write_pool = ThreadPool(1)
-    # write_pool.map(write_task, range(len(bins)))
-    # write_pool.close()
-    # write_pool.join()
-    for i in range(len(bins)):
-       write_task(i)
+    write_pool = ThreadPool(1)
+    write_pool.map(write_task, range(len(bins)))
+    write_pool.close()
+    write_pool.join()
+    # for i in range(len(bins)):
+    #    write_task(i)
     t2 = time.time()
 
     for pipe in pipes:
@@ -474,7 +451,7 @@ def read_local_intermediate(key):
     for d in dtypes:
         if dtypes[d] == datetime.datetime or dtypes[d] == np.datetime64:
             parse_dates.append(d)
-            dtypes[d] = np.dtype(np.unicode)
+            dtypes[d] = np.dtype("string")
     part_data = pd.read_table(key['loc'],
                               delimiter="|",
                               header=None,
@@ -529,7 +506,7 @@ def read_redis_intermediate(key, redis_client=None):
     for d in dtypes:
         if dtypes[d] == datetime.datetime or dtypes[d] == np.datetime64:
             parse_dates.append(d)
-            dtypes[d] = np.dtype(np.unicode)
+            dtypes[d] = np.dtype("string")
     if redis_client == None:
         redis_index = hash_key_to_index(key['loc'], len(hostnames))
         redis_client = redis.StrictRedis(host=hostnames[redis_index], port=6379, db=0)
@@ -721,17 +698,10 @@ def get_locations(table):
 
 def execute_lambda_stage(stage_function, tasks):
     t0 = time.time()
-    # futures = wrenexec.map(stage_function, tasks)
-    # pywren.wait(futures, 1, 64, 1)
     for task in tasks:
         task['key']['write_output'] = True
     futures = wrenexec.map(stage_function, tasks)
-    # futures = wrenexec.map_sync_with_rate_and_retries(stage_function, tasks, straggler=False, WAIT_DUR_SEC=5,
-    #                                                   rate=pywren_rate)
     results = wrenexec.get_result(futures)
-    # results = [f.result() for f in futures]
-    # run_statuses = [f.run_status for f in futures]
-    # invoke_statuses = [f.invoke_status for f in futures]
     t1 = time.time()
     res = {'results': results,
            't0': t0,
@@ -766,7 +736,7 @@ def execute_stage(stage_function, tasks):
 
 results = []
 if os.path.exists(filename):
-    results = pickle.load(open(filename, "rb"))
+    results = pickle.load(open(filename, "r"))
 
 
 # implementing all stages
