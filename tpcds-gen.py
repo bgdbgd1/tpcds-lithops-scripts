@@ -1,11 +1,12 @@
 import lithops
 import boto3
 import os
-from config_vars import S3_BUCKET
 from smart_open import open
 from lithops import FunctionExecutor
 
 from util import copyfileobj
+
+S3_BUCKET = 'bogdan-experiments'
 
 if __name__ == "__main__":
     import logging
@@ -83,15 +84,7 @@ if __name__ == "__main__":
 
     def run_command(key):
         logger = logging.getLogger(__name__)
-
         client = boto3.client('s3', 'eu-central-1')
-        if os.path.isfile('dsdgen'):
-            print("=====================HEREEEEE==========================")
-        else:
-            print("=====================NOT HEREEEEE==========================")
-        # else:
-        #     print("=================FILE dsdgen IS HERE=================")
-
         for i in range(0, 5):
             table = key['table']
             start_index = key['start_index']
@@ -108,6 +101,7 @@ if __name__ == "__main__":
                            "-force",
                            "-suffix", ".csv",
                            "-distribution", "tpcds.idx",
+                           "-dir", "/tmp/",
                            ]
             else:
                 command = ["./dsdgen",
@@ -118,24 +112,14 @@ if __name__ == "__main__":
                            "-parallel", str(total),
                            "-child", str(index),
                            "-distribution", "tpcds.idx",
+                           "-dir", "/tmp/",
                            ]
             subprocess.run(command)
 
-            # with open(f's3://{S3_BUCKET}/test_file.csv', 'wb') as dest_file:
-            #     with subprocess.Popen(command, stdout=subprocess.PIPE) as p:
-            #         with p.stdout as genoutput:
-            #             copyfileobj(genoutput, dest_file)
-            #         returncode = p.wait()
-            #         if returncode != 0:
-            #             raise Exception(f'Non-zero return code for gensort: {returncode}')
-            # subprocess.run(command)
-            res = subprocess.check_output(["ls"])
-            print(res)
-
             filename = table + "_" + str(index) + "_" + str(total) + ".csv"
-            fullpathfile = filename
+            fullpathfile = '/tmp/' + filename
             if total == 1:
-                srcfullpath = table + ".csv"
+                srcfullpath = '/tmp/' + table + ".csv"
                 res = subprocess.check_output(["mv", srcfullpath, fullpathfile])
             if not os.path.isfile(fullpathfile):
                 print(f"bad: fullpathfile - {fullpathfile}, total - {total}")
@@ -148,7 +132,7 @@ if __name__ == "__main__":
             if "sales" in table:
                 return_table = table.split("_")[0] + "_returns"
                 return_filename = return_table + "_" + str(index) + "_" + str(total) + ".csv"
-                return_fullpathfile = return_filename
+                return_fullpathfile = '/tmp/' + return_filename
                 if total == 1:
                     src_return_fullpath = return_table + ".csv"
                     res = subprocess.check_output(["mv", src_return_fullpath, return_fullpathfile])
@@ -223,12 +207,12 @@ if __name__ == "__main__":
                  ("web_site", 1)]
     all_tables = {10: tables_10, 100: tables_100, 1000: tables_1000}
 
-    scale = 10
+    scale = 100
     passed_tasks = []
     for (table, total) in all_tables[scale]:
-        if table is not "web_sales":
-            continue
-        print(table + " " + str(total))
+        # if table is not "web_sales":
+        #     continue
+        # print(table + " " + str(total))
 
         for i in range(1, total + 1, 5):
             key = {}
@@ -237,12 +221,10 @@ if __name__ == "__main__":
             key['table'] = table
             key['start_index'] = i
             passed_tasks.append({'key': key})
-
-    res = run_all_commands_local(passed_tasks)
-    # with FunctionExecutor(runtime='bogdan/tpcds-scripts-linux-2') as fexec:
-    #     fut = fexec.map(run_command, [passed_tasks[0]])
-    #     res = fexec.get_result(fut)
-    # pywren.wait(fut)
-    # res = [f.result() for f in fut]
+    # passed_tasks = [passed_tasks[0]]
+    # res = run_all_commands_local(passed_tasks)
+    with FunctionExecutor(runtime='bogdan/tpcds-2') as fexec:
+        fut = fexec.map(run_command, passed_tasks)
+        res = fexec.get_result(fut)
     print("good:" + str(res.count("good")) + " bad:" + str(res.count("bad")) + " total:" + str(len(res)))
     # exit(0)

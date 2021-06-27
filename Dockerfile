@@ -10,17 +10,16 @@ ARG FUNCTION_DIR
 RUN apt-get update && \
   apt-get install -y \
   g++ \
-  gcc \
   make \
   cmake \
-  flex \
-  bison \
-  byacc \
   unzip \
   libcurl4-openssl-dev
 
 # Copy function code
 RUN mkdir -p ${FUNCTION_DIR}
+
+# Update pip
+RUN pip install -U pip wheel six setuptools
 
 # Install the function's dependencies
 RUN pip install \
@@ -33,17 +32,13 @@ RUN pip install \
         numpy \
         scipy \
         pandas \
-        pika==0.13.1 \
+        pika \
         kafka-python \
         cloudpickle \
         ps-mem \
         tblib \
-        fsspec
-
-# Additional dependencies
-RUN pip install \
-    --target ${FUNCTION_DIR} \
-        smart_open
+        fsspec \
+        s3fs
 
 
 FROM python:3.8-buster
@@ -57,12 +52,21 @@ WORKDIR ${FUNCTION_DIR}
 COPY --from=build-image ${FUNCTION_DIR} ${FUNCTION_DIR}
 
 # Add Lithops
-RUN mkdir lithops
 COPY lithops_lambda.zip ${FUNCTION_DIR}
-RUN unzip lithops_lambda.zip && rm lithops_lambda.zip
+RUN unzip lithops_lambda.zip \
+    && rm lithops_lambda.zip \
+    && mkdir handler \
+    && touch handler/__init__.py \
+    && mv __main__.py handler/
 
-# Add the gensort executable
+# Put your dependencies here, using RUN pip install... or RUN apt install...
+# Additional dependencies
+RUN pip install \
+    --target ${FUNCTION_DIR} \
+        smart_open
+
 COPY tools ${FUNCTION_DIR}
-RUN ["chmod", "+x", "dsdgen"]
+
+RUN ["chmod", "+rwx", "dsdgen"]
 ENTRYPOINT [ "/usr/local/bin/python", "-m", "awslambdaric" ]
-CMD [ "__main__.lambda_handler" ]
+CMD [ "handler.__main__.lambda_handler" ]
